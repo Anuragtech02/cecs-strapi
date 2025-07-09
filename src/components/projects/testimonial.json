@@ -1,0 +1,22 @@
+{
+  "collectionName": "components_projects_testimonials",
+  "info": {
+    "displayName": "Testimonial",
+    "description": ""
+  },
+  "options": {},
+  "attributes": {
+    "founder": {
+      "type": "string",
+      "required": true
+    },
+    "testimonial": {
+      "type": "text",
+      "required": true
+    },
+    "clientDesignation": {
+      "type": "string",
+      "required": true
+    }
+  }
+}
