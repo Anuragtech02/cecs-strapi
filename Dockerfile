@@ -1,9 +1,7 @@
-# Dockerfile for Strapi Application
-# This should be placed in the app/ directory alongside your Strapi code
+# Stage 1: Build stage
+FROM node:18-alpine as build
 
-FROM node:18-alpine
-
-# Install system dependencies
+# Install build dependencies
 RUN apk update && apk add --no-cache \
     build-base \
     gcc \
@@ -12,38 +10,62 @@ RUN apk update && apk add --no-cache \
     zlib-dev \
     libpng-dev \
     nasm \
-    bash \
     vips-dev \
     git \
-    curl
+    curl \
+    > /dev/null 2>&1
 
-# Set working directory
-WORKDIR /opt/app
+# Set environment for build
+ENV NODE_ENV=production
 
-# Copy package files first (for better Docker layer caching)
+# Set working directory for dependencies
+WORKDIR /opt/
+
+# Copy package files
 COPY package*.json ./
 COPY yarn.lock* ./
 
-# Install dependencies
-RUN if [ -f yarn.lock ]; then yarn install --frozen-lockfile; \
-    else npm ci && npm cache clean --force; fi
+# Install yarn globally and configure
+RUN yarn global add node-gyp
+RUN yarn config set network-timeout 600000 -g && yarn install --production
 
-# Copy the rest of the application
+# Set PATH to include node_modules/.bin
+ENV PATH=/opt/node_modules/.bin:$PATH
+
+# Set working directory for app
+WORKDIR /opt/app
+
+# Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p public/uploads
+# Build the Strapi application
+RUN yarn build
 
-# Build the application (only if in production)
-ARG NODE_ENV=development
-ENV NODE_ENV=${NODE_ENV}
+# Stage 2: Production runtime image
+FROM node:18-alpine
 
-# Build Strapi admin and app if in production
-RUN if [ "$NODE_ENV" = "production" ]; then \
-    npm run build; \
-    fi
+# Install only runtime dependencies
+RUN apk add --no-cache vips-dev curl
 
-# Set proper permissions
+# Set production environment
+ENV NODE_ENV=production
+
+# Set working directory for dependencies
+WORKDIR /opt/
+
+# Copy node_modules from build stage
+COPY --from=build /opt/node_modules ./node_modules
+
+# Set working directory for app
+WORKDIR /opt/app
+
+# Copy built application from build stage
+COPY --from=build /opt/app ./
+
+# Set PATH to include node_modules/.bin
+ENV PATH=/opt/node_modules/.bin:$PATH
+
+# Ensure node user owns everything
 RUN chown -R node:node /opt/app
 
 # Switch to non-root user
@@ -56,29 +78,5 @@ EXPOSE 1337
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:1337/_health || exit 1
 
-# Create entrypoint script to handle development vs production
-COPY --chown=node:node <<'EOF' /opt/app/docker-entrypoint.sh
-#!/bin/bash
-set -e
-
-echo "Starting Strapi in $NODE_ENV mode..."
-
-if [ "$NODE_ENV" = "production" ]; then
-    # Production mode - build if dist doesn't exist, then start
-    if [ ! -d "dist" ]; then
-        echo "Building Strapi for production..."
-        npm run build
-    fi
-    echo "Starting Strapi in production mode..."
-    exec npm start
-else
-    # Development mode - use develop command
-    echo "Starting Strapi in development mode..."
-    exec npm run develop
-fi
-EOF
-
-RUN chmod +x /opt/app/docker-entrypoint.sh
-
-# Start Strapi
-ENTRYPOINT ["/opt/app/docker-entrypoint.sh"]
+# Start Strapi in production mode
+CMD ["yarn", "start"]
