@@ -1,3 +1,4 @@
+# Multi-stage Dockerfile for Strapi 4.20.4 Production
 # Stage 1: Build stage
 FROM node:18-alpine as build
 
@@ -38,6 +39,9 @@ WORKDIR /opt/app
 # Copy application code
 COPY . .
 
+# Create public/uploads directory
+RUN mkdir -p /opt/app/public/uploads
+
 # Build the Strapi application
 RUN yarn build
 
@@ -61,6 +65,12 @@ WORKDIR /opt/app
 
 # Copy built application from build stage
 COPY --from=build /opt/app ./
+
+RUN mkdir -p /opt/app/public/uploads && \
+    chown -R node:node /opt/app && \
+    chmod -R 755 /opt/app && \
+    chmod 777 /opt/app/ssl && \
+    chmod 777 /opt/app/public/uploads
 
 # Set PATH to include node_modules/.bin
 ENV PATH=/opt/node_modules/.bin:$PATH
