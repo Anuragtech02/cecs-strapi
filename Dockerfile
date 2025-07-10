@@ -69,7 +69,6 @@ COPY --from=build /opt/app ./
 RUN mkdir -p /opt/app/public/uploads && \
     chown -R node:node /opt/app && \
     chmod -R 755 /opt/app && \
-    chmod 777 /opt/app/ssl && \
     chmod 777 /opt/app/public/uploads
 
 # Set PATH to include node_modules/.bin
